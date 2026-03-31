@@ -13,12 +13,20 @@ export default function Navbar() {
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [scrolled, setScrolled] = useState(false);
+  const [gameProgressPercent, setGameProgressPercent] = useState(0);
   const isLoggedIn = !!localStorage.getItem('token');
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Landing page = 0% progress. This also allows future mid-game restore without UI changes.
+  useEffect(() => {
+    const saved = localStorage.getItem('gameProgressPercent');
+    const n = saved != null ? Number(saved) : 0;
+    if (!Number.isNaN(n)) setGameProgressPercent(Math.max(0, Math.min(100, n)));
   }, []);
 
   const openAuth = (mode: 'login' | 'signup') => {
@@ -75,6 +83,10 @@ export default function Navbar() {
               {isMobileMenuOpen ? <X size={24}/> : <Menu size={24}/>}
             </button>
           </div>
+        </div>
+
+        <div className="game-progress-bar" aria-hidden="true">
+          <div className="game-progress-bar-fill" style={{ width: `${gameProgressPercent}%` }} />
         </div>
 
         {/* Mobile Menu */}

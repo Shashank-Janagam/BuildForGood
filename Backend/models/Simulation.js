@@ -52,6 +52,28 @@ const SimulationSchema = new mongoose.Schema({
   decisionLog: [DecisionLogSchema],                   // All decisions made
   operationalComplete: { type: Boolean, default: false },
 
+  // Co-founder recruited by founder
+  coFounderId:    { type: mongoose.Schema.Types.ObjectId, ref: 'CoFounder', default: null },
+  coFounderName:  { type: String, default: null },
+  coFounderTier:  { type: String, default: null },
+  coFounderPrice: { type: Number, default: null },
+  coFounderSkipped: { type: Boolean, default: false },
+
+  // Investor Pitch
+  pitchComplete: { type: Boolean, default: false },
+  fundingInvestor: { type: String, default: null },
+  fundingAmount: { type: String, default: null },
+  fundingEquity: { type: String, default: null },
+
+  // MVP Builder
+  mvpComplete: { type: Boolean, default: false },
+  mvpFeatures: [{
+    id: String,
+    name: String,
+    cost: Number,
+    impactScore: Number
+  }],
+
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
