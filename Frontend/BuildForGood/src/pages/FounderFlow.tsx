@@ -3,9 +3,14 @@ import Navbar from '../components/Navbar';
 import {
   Sparkles, UserCircle, Send, ArrowLeft, BrainCircuit,
   RefreshCw, CheckCircle2, Activity, ShieldAlert,
-  AlertTriangle, Zap
+  AlertTriangle, Zap, UserPlus, Users
 } from 'lucide-react';
 import { useLang } from '../contexts/LanguageContext';
+import InvestorPitch from '../components/InvestorPitch';
+import type { FundingOffer } from '../components/InvestorPitch';
+import MVPBuilder from '../components/MVPBuilder';
+import type { MVPFeature } from '../components/MVPBuilder';
+import ReportCard from '../components/ReportCard';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -20,7 +25,20 @@ interface Evaluation { score: number; riskLabel: string; winRate: string; discip
 interface Choice { id: string; label: string; deltas: { cash: number; impact: number; trust: number }; }
 interface Scenario { id: string; title: string; description: string; choices: Choice[]; }
 
-type AppState = 'form' | 'personas' | 'chat' | 'evaluation' | 'operational' | 'report';
+type AppState = 'form' | 'personas' | 'chat' | 'evaluation' | 'operational' | 'cofounder_recruit' | 'mvp_builder' | 'investor_pitch' | 'report';
+
+interface CoFounderProfile {
+  _id: string;
+  name: string;
+  domain: string;
+  tier: 'Newbie' | 'Amateur' | 'Professional';
+  score: number;
+  specialty: string;
+  price: number;
+  rating: number;
+  bio: string;
+  isRecruited?: boolean;
+}
 
 interface FounderFlowProps {
   initialSimulationId?: string | null;
@@ -52,6 +70,19 @@ export function FounderFlowContent({ initialSimulationId, onProjectStarted }: Fo
   const [resources, setResources] = useState({ cash: 80, impact: 20, trust: 50 });
   const [remainingBudget, setRemainingBudget] = useState<number | null>(null);
   const [decisionLog, setDecisionLog] = useState<{ scenarioId: string; choiceLabel: string; deltas: { cash: number; impact: number; trust: number } }[]>([]);
+
+  // ── CO-FOUNDER RECRUIT STATE ──
+  const [cofounderDomain, setCofounderDomain] = useState<string>('All');
+  const [cofounderTier, setCofounderTier]     = useState<string>('All');
+  const [cofounderProfiles, setCofounderProfiles] = useState<CoFounderProfile[]>([]);
+  const [isGeneratingCofounders, setIsGeneratingCofounders] = useState(false);
+  const [selectedCofounder, setSelectedCofounder] = useState<CoFounderProfile | null>(null);
+
+  // ── INVESTOR FUNDING STATE ──
+  const [fundingDetails, setFundingDetails] = useState<FundingOffer | null>(null);
+
+  // ── MVP BUILDER STATE ──
+  const [mvpFeatures, setMvpFeatures] = useState<MVPFeature[]>([]);
 
   const getHeaders = () => ({
     'Content-Type': 'application/json',
@@ -87,7 +118,34 @@ export function FounderFlowContent({ initialSimulationId, onProjectStarted }: Fo
           if (data.operationalComplete) {
             if (data.operationalResources) setResources(data.operationalResources);
             if (data.decisionLog) setDecisionLog(data.decisionLog);
-            setAppState('report');
+            
+            // Re-route based on saved progress to resume exactly where the founder left off
+            if (data.pitchComplete) {
+              setAppState('report');
+              if (data.fundingInvestor) {
+                setFundingDetails({ investorName: data.fundingInvestor, amount: data.fundingAmount, equity: data.fundingEquity });
+              }
+              if (data.mvpFeatures) setMvpFeatures(data.mvpFeatures);
+            } else if (data.mvpComplete) {
+              setAppState('investor_pitch');
+              if (data.mvpFeatures) setMvpFeatures(data.mvpFeatures);
+            } else if (data.coFounderId || data.coFounderSkipped) {
+              setAppState('mvp_builder');
+            } else {
+              setAppState('cofounder_recruit');
+            }
+
+            // Restore partial cofounder details for the report page
+            if (data.coFounderId) {
+              setSelectedCofounder({
+                _id: data.coFounderId,
+                name: data.coFounderName,
+                tier: data.coFounderTier as 'Newbie' | 'Amateur' | 'Professional',
+                price: data.coFounderPrice,
+                specialty: data.coFounderSpecialty || 'Expert',
+                score: 0, rating: 0, bio: '', domain: ''
+              });
+            }
           } else if (data.decisionLog?.length > 0) {
             // Operational was started but not finished — restore gauges, let user continue
             if (data.operationalResources) setResources(data.operationalResources);
@@ -97,7 +155,7 @@ export function FounderFlowContent({ initialSimulationId, onProjectStarted }: Fo
             setAppState('evaluation');
           }
         } else if (data.personas?.length > 0) {
-          setAppState('personas');
+           setAppState('personas');
         }
       }
     } catch { setError('Failed to load project'); }
@@ -294,7 +352,7 @@ export function FounderFlowContent({ initialSimulationId, onProjectStarted }: Fo
     }
 
     if (isComplete) {
-      setAppState('report');
+      setAppState('cofounder_recruit');
     } else {
       setCurrentScenarioIdx(prev => prev + 1);
     }
@@ -315,9 +373,12 @@ export function FounderFlowContent({ initialSimulationId, onProjectStarted }: Fo
   const renderProgress = () => {
     const steps = [
       { id: 1, label: t('discovery'), state: ['form','personas','chat'].includes(appState) ? 'active' : 'done' },
-      { id: 2, label: t('evaluation'), state: appState === 'evaluation' ? 'active' : ['operational','report'].includes(appState) ? 'done' : 'pending' },
-      { id: 3, label: t('operations'), state: appState === 'operational' ? 'active' : appState === 'report' ? 'done' : 'pending' },
-      { id: 4, label: t('report'), state: appState === 'report' ? 'active' : 'pending' },
+      { id: 2, label: t('evaluation'), state: appState === 'evaluation' ? 'active' : ['operational','cofounder_recruit','mvp_builder','investor_pitch','report'].includes(appState) ? 'done' : 'pending' },
+      { id: 3, label: t('operations'), state: appState === 'operational' ? 'active' : ['cofounder_recruit','mvp_builder','investor_pitch','report'].includes(appState) ? 'done' : 'pending' },
+      { id: 4, label: 'Co-Founder', state: appState === 'cofounder_recruit' ? 'active' : ['mvp_builder','investor_pitch','report'].includes(appState) ? 'done' : 'pending' },
+      { id: 5, label: 'MVP', state: appState === 'mvp_builder' ? 'active' : ['investor_pitch','report'].includes(appState) ? 'done' : 'pending' },
+      { id: 6, label: 'Investor', state: appState === 'investor_pitch' ? 'active' : appState === 'report' ? 'done' : 'pending' },
+      { id: 7, label: t('report'), state: appState === 'report' ? 'active' : 'pending' },
     ];
     return (
       <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'2rem', padding:'1rem 1.25rem', background:'var(--bg-base)', borderRadius:'var(--radius-md)', border:'1px solid var(--border-light)' }}>
@@ -679,63 +740,297 @@ export function FounderFlowContent({ initialSimulationId, onProjectStarted }: Fo
   }
 
   // ─────────────────────────────────────────────────
+  // RENDER: CO-FOUNDER RECRUITMENT — After Operational
+  // ─────────────────────────────────────────────────
+  if (appState === 'cofounder_recruit') {
+    const tierColor = (t: string) => t === 'Professional' ? '#8b5cf6' : t === 'Amateur' ? '#f59e0b' : '#10b981';
+
+    // Auto-detect domain from problem statement
+    const detectProblemDomain = (p: string): string => {
+      const lower = p.toLowerCase();
+      if (lower.includes('health') || lower.includes('clinic') || lower.includes('medical') || lower.includes('hospital')) return 'Health & Wellness';
+      if (lower.includes('climate') || lower.includes('solar') || lower.includes('carbon') || lower.includes('waste') || lower.includes('environment')) return 'Climate & Environment';
+      if (lower.includes('education') || lower.includes('school') || lower.includes('learn') || lower.includes('student')) return 'Education';
+      if (lower.includes('farm') || lower.includes('agri') || lower.includes('crop') || lower.includes('soil')) return 'Agriculture';
+      if (lower.includes('finance') || lower.includes('loan') || lower.includes('credit') || lower.includes('bank') || lower.includes('fintech')) return 'Fintech & Inclusion';
+      return 'Social Impact';
+    };
+
+    const CF_DOMAINS = ['All', 'Climate & Environment', 'Health & Wellness', 'Education', 'Fintech & Inclusion', 'Agriculture', 'Social Impact'];
+    const CF_TIERS   = ['All', 'Newbie', 'Amateur', 'Professional'];
+
+    // initialise domain from problem statement on first render
+    const detectedDomain = detectProblemDomain(problem);
+
+    const handleLoadPool = async (domain: string, tier: string) => {
+      setIsGeneratingCofounders(true);
+      try {
+        const params = new URLSearchParams();
+        if (domain !== 'All') params.set('domain', domain);
+        if (tier   !== 'All') params.set('tier',   tier);
+        const url = `${API_URL}/api/cofounder/pool${params.toString() ? '?' + params.toString() : ''}`;
+        const res = await fetch(url, { headers: getHeaders() });
+        if (res.ok) {
+          const data: CoFounderProfile[] = await res.json();
+          setCofounderProfiles(data);
+        } else {
+          setCofounderProfiles([]);
+        }
+      } catch {
+        setCofounderProfiles([]);
+      } finally {
+        setIsGeneratingCofounders(false);
+      }
+    };
+
+    const handleRecruit = async (cf: CoFounderProfile) => {
+      setSelectedCofounder(cf);
+      try {
+        await fetch(`${API_URL}/api/cofounder/recruit`, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ coFounderId: cf._id, simulationId })
+        });
+        setCofounderProfiles(prev => prev.filter(p => p._id !== cf._id));
+      } catch { /* optimistic */ }
+    };
+
+    return (
+      <main style={{ flex:1, width:'100%', display:'flex', flexDirection:'column', animation:'fadeIn 0.3s ease-out' }}>
+        {renderProgress()}
+
+        {/* Header */}
+        <div style={{ textAlign:'center', marginBottom:'2rem' }}>
+          <div style={{ fontSize:'3rem', marginBottom:'0.75rem' }}>🤝</div>
+          <h2 style={{ fontSize:'1.8rem', fontWeight:800, color:'var(--text-primary)', marginBottom:'0.5rem' }}>Recruit a Co-Founder</h2>
+          <p style={{ color:'var(--text-secondary)', maxWidth:540, margin:'0 auto', lineHeight:1.6 }}>
+            Browse quiz-verified applicants. Filter by <strong>domain</strong> or <strong>tier</strong>, then recruit the right match for your venture.
+          </p>
+        </div>
+
+        {/* Recruited confirmation */}
+        {selectedCofounder ? (
+          <div style={{ maxWidth:560, margin:'0 auto', width:'100%', textAlign:'center' }}>
+            <div style={{ fontSize:'3rem', marginBottom:'0.75rem' }}>🎉</div>
+            <h3 style={{ fontWeight:800, fontSize:'1.4rem', color:'var(--text-primary)', marginBottom:'0.4rem' }}>
+              {selectedCofounder.name} is on board!
+            </h3>
+            <p style={{ color:'var(--text-secondary)', lineHeight:1.6, marginBottom:'1.5rem' }}>
+              <strong>{selectedCofounder.specialty}</strong> · {selectedCofounder.tier} · {selectedCofounder.domain}
+              <br/>₹{selectedCofounder.price.toLocaleString('en-IN')}/month
+            </p>
+            <button onClick={() => setAppState('mvp_builder')} className="btn-solid btn-lg"
+              style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:'0.5rem' }}>
+              <Zap size={16}/> Build your MVP →
+            </button>
+          </div>
+        ) : (
+          <div style={{ maxWidth:1050, margin:'0 auto', width:'100%' }}>
+
+            {/* Auto-detected domain hint */}
+            <div style={{ background:'rgba(37,99,235,0.05)', border:'1px solid rgba(37,99,235,0.15)', borderRadius:'var(--radius-md)', padding:'0.75rem 1.1rem', marginBottom:'1.25rem', display:'flex', alignItems:'center', gap:'0.75rem', fontSize:'0.88rem' }}>
+              <span style={{ fontSize:'1rem' }}>🎯</span>
+              <span style={{ color:'var(--text-secondary)' }}>Detected domain for your problem: <strong style={{ color:'var(--accent-primary)' }}>{detectedDomain}</strong>. Pre-filtered below — change anytime.</span>
+            </div>
+
+            {/* DOMAIN filter row */}
+            <div style={{ marginBottom:'0.75rem' }}>
+              <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.08em', marginBottom:'0.4rem' }}>DOMAIN</div>
+              <div style={{ display:'flex', gap:'0.5rem', flexWrap:'wrap' }}>
+                {CF_DOMAINS.map(d => {
+                  const isAuto = d === detectedDomain && cofounderDomain === 'All';
+                  const isActive = cofounderDomain === d;
+                  return (
+                    <button key={d} onClick={() => setCofounderDomain(d)}
+                      style={{ padding:'0.35rem 0.9rem', borderRadius:'var(--radius-pill)', border:`1.5px solid ${isActive || isAuto ? 'var(--accent-primary)' : 'var(--border-light)'}`, background: isActive ? 'var(--accent-primary)' : isAuto ? 'rgba(37,99,235,0.08)' : 'var(--bg-base)', color: isActive ? '#fff' : 'var(--text-primary)', fontWeight:600, fontSize:'0.8rem', cursor:'pointer', transition:'all 0.2s', fontFamily:'inherit', whiteSpace:'nowrap' }}>
+                      {d}{isAuto && d !== 'All' ? ' ✦' : ''}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* TIER filter row */}
+            <div style={{ marginBottom:'1.25rem' }}>
+              <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.08em', marginBottom:'0.4rem' }}>TIER</div>
+              <div style={{ display:'flex', gap:'0.5rem', flexWrap:'wrap' }}>
+                {CF_TIERS.map(tr => {
+                  const isActive = cofounderTier === tr;
+                  const tc = tr === 'Professional' ? '#8b5cf6' : tr === 'Amateur' ? '#f59e0b' : tr === 'Newbie' ? '#10b981' : 'var(--text-primary)';
+                  return (
+                    <button key={tr} onClick={() => setCofounderTier(tr)}
+                      style={{ padding:'0.35rem 0.9rem', borderRadius:'var(--radius-pill)', border:`1.5px solid ${isActive ? tc : 'var(--border-light)'}`, background: isActive ? `${tc}15` : 'var(--bg-base)', color: isActive ? tc : 'var(--text-primary)', fontWeight:600, fontSize:'0.8rem', cursor:'pointer', transition:'all 0.2s', fontFamily:'inherit' }}>
+                      {tr === 'Newbie' ? '🌱 ' : tr === 'Amateur' ? '⚡ ' : tr === 'Professional' ? '👑 ' : ''}{tr}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Actions row */}
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:'0.75rem', marginBottom:'1.5rem' }}>
+              <button onClick={() => { 
+                setAppState('mvp_builder');
+                fetch(`${API_URL}/api/simulation/progress`, {
+                  method: 'POST',
+                  headers: getHeaders(),
+                  body: JSON.stringify({ simulationId, coFounderSkipped: true })
+                }).catch(console.error);
+              }}
+                className="btn-outline" style={{ padding:'0.6rem 1.1rem', fontSize:'0.88rem' }}>
+                Skip → Build MVP
+              </button>
+              <button
+                onClick={() => {
+                  const effectiveDomain = cofounderDomain === 'All' ? detectedDomain : cofounderDomain;
+                  handleLoadPool(effectiveDomain, cofounderTier);
+                }}
+                disabled={isGeneratingCofounders}
+                className="btn-solid" style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.65rem 1.2rem', fontSize:'0.88rem' }}>
+                {isGeneratingCofounders ? <div className="loader-white" style={{ width:14, height:14 }}/> : <><Users size={14}/> Browse Pool</>}
+              </button>
+            </div>
+
+            {/* Pool results */}
+            {cofounderProfiles.length === 0 && !isGeneratingCofounders && (
+              <div style={{ textAlign:'center', padding:'3rem 2rem', background:'var(--bg-base)', borderRadius:'var(--radius-lg)', border:'1px solid var(--border-light)' }}>
+                <div style={{ fontSize:'2.5rem', marginBottom:'0.75rem' }}>🔍</div>
+                <h3 style={{ fontWeight:700, color:'var(--text-primary)', marginBottom:'0.4rem' }}>No applicants found</h3>
+                <p style={{ color:'var(--text-secondary)', fontSize:'0.9rem', maxWidth:380, margin:'0 auto' }}>
+                  Click <strong>Browse Pool</strong> to load available co-founders. Try <strong>All</strong> domain or <strong>All</strong> tier if none appear — co-founders appear here after completing the quiz in the Co-Founder Module.
+                </p>
+              </div>
+            )}
+
+            {cofounderProfiles.length > 0 && (
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:'1.25rem' }}>
+                {cofounderProfiles.map((cf) => {
+                  const tc = tierColor(cf.tier);
+                  return (
+                    <div key={cf._id}
+                      style={{ background:'var(--bg-base)', border:'2px solid var(--border-light)', borderRadius:'var(--radius-lg)', padding:'1.5rem', boxShadow:'var(--shadow-sm)', display:'flex', flexDirection:'column', transition:'all 0.2s' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = tc; (e.currentTarget as HTMLElement).style.boxShadow = 'var(--shadow-md)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-light)'; (e.currentTarget as HTMLElement).style.boxShadow = 'var(--shadow-sm)'; }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' }}>
+                        <div style={{ width:44, height:44, borderRadius:'50%', background:`${tc}18`, display:'flex', alignItems:'center', justifyContent:'center', color:tc, fontWeight:800, fontSize:'1.2rem' }}>
+                          {cf.name.charAt(0)}
+                        </div>
+                        <span style={{ fontSize:'0.7rem', fontWeight:700, padding:'0.25rem 0.65rem', borderRadius:'var(--radius-pill)', background:`${tc}15`, color:tc, textTransform:'uppercase' }}>
+                          {cf.tier}
+                        </span>
+                      </div>
+                      <div style={{ fontWeight:700, color:'var(--text-primary)', fontSize:'1rem', marginBottom:'0.2rem' }}>{cf.name}</div>
+                      <div style={{ fontSize:'0.8rem', color:'var(--accent-primary)', fontWeight:600, marginBottom:'0.2rem' }}>{cf.specialty}</div>
+                      <div style={{ fontSize:'0.72rem', color:'var(--text-muted)', marginBottom:'0.75rem', display:'flex', alignItems:'center', gap:'0.4rem' }}>
+                        <span style={{ background:'var(--bg-surface)', padding:'0.15rem 0.5rem', borderRadius:'var(--radius-pill)', border:'1px solid var(--border-light)' }}>{cf.domain}</span>
+                      </div>
+                      <p style={{ fontSize:'0.82rem', color:'var(--text-secondary)', lineHeight:1.5, flex:1, marginBottom:'1rem' }}>{cf.bio}</p>
+                      <div style={{ display:'flex', alignItems:'center', gap:'0.25rem', marginBottom:'0.75rem' }}>
+                        {[1,2,3,4,5].map(s => (
+                          <span key={s} style={{ color: s <= Math.round(cf.rating) ? '#f59e0b' : 'var(--border-light)', fontSize:'0.85rem' }}>★</span>
+                        ))}
+                        <span style={{ fontSize:'0.75rem', color:'var(--text-muted)', marginLeft:'0.35rem' }}>{cf.rating.toFixed(1)}</span>
+                        <span style={{ marginLeft:'auto', fontSize:'0.72rem', color:'var(--text-muted)' }}>Score: {cf.score}/7</span>
+                      </div>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:'0.75rem', borderTop:'1px solid var(--border-light)' }}>
+                        <div>
+                          <span style={{ fontSize:'1.05rem', fontWeight:800, color:tc }}>₹{cf.price.toLocaleString('en-IN')}</span>
+                          <span style={{ fontSize:'0.7rem', color:'var(--text-muted)', marginLeft:'0.25rem' }}>/mo</span>
+                        </div>
+                        <button onClick={() => handleRecruit(cf)}
+                          style={{ padding:'0.45rem 0.9rem', borderRadius:'var(--radius-md)', border:`1.5px solid ${tc}`, background:`${tc}12`, color:tc, fontWeight:700, fontSize:'0.8rem', cursor:'pointer', fontFamily:'inherit', transition:'all 0.2s', display:'flex', alignItems:'center', gap:'0.35rem' }}>
+                          <UserPlus size={13}/> Recruit
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+    );
+  }
+
+  // ─────────────────────────────────────────────────
+  // RENDER: MVP BUILDER
+  // ─────────────────────────────────────────────────
+  if (appState === 'mvp_builder') {
+    const budgetForMvp = remainingBudget ?? (budget ? Number(budget) : 200000);
+    return (
+      <main style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.3s ease-out' }}>
+        {renderProgress()}
+        <div style={{ flex: 1, position: 'relative', overflowY: 'auto' }}>
+          <MVPBuilder availableBudget={budgetForMvp} domain={problem} onComplete={async (features) => {
+            setMvpFeatures(features);
+            setAppState('investor_pitch');
+            try {
+              await fetch(`${API_URL}/api/simulation/progress`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({
+                  simulationId,
+                  mvpComplete: true,
+                  mvpFeatures: features
+                })
+              });
+            } catch (e) { console.error('Failed to save mvp state:', e); }
+          }} />
+        </div>
+      </main>
+    );
+  }
+
+  // ─────────────────────────────────────────────────
+  // RENDER: INVESTOR PITCH — After MVP
+  // ─────────────────────────────────────────────────
+  if (appState === 'investor_pitch') {
+    return (
+      <main style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.3s ease-out' }}>
+        {renderProgress()}
+        <div style={{ flex: 1, position: 'relative' }}>
+          <InvestorPitch problemStatement={problem} onComplete={async (offer) => { 
+            setFundingDetails(offer); 
+            setAppState('report'); 
+            try {
+              await fetch(`${API_URL}/api/simulation/progress`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({
+                  simulationId,
+                  pitchComplete: true,
+                  fundingInvestor: offer?.investorName || null,
+                  fundingAmount: offer?.amount || null,
+                  fundingEquity: offer?.equity || null
+                })
+              });
+            } catch (e) { console.error('Failed to save pitch state:', e); }
+          }} />
+        </div>
+      </main>
+    );
+  }
+
+  // ─────────────────────────────────────────────────
   // RENDER: REPORT — Post-Mortem
   // ─────────────────────────────────────────────────
   if (appState === 'report') {
-    const survived = resources.cash > 0;
-    const impactScore = resources.impact;
-    const trustScore = resources.trust;
     return (
-      <main style={{ flex:1, width:'100%', display:'flex', flexDirection:'column', animation:'slideUp 0.5s ease-out' }}>
+      <main style={{ flex:1, width:'100%', display:'flex', flexDirection:'column', animation:'slideUp 0.5s ease-out', paddingBottom:'4rem' }}>
         {renderProgress()}
-        <div style={{ background: survived ? 'linear-gradient(135deg, #064e3b, #065f46)' : 'linear-gradient(135deg, #1f2937, #111827)', padding:'2.5rem', borderRadius:'1.5rem', color:'#fff', boxShadow:'var(--shadow-lg)', marginBottom:'1.5rem' }}>
-          <div style={{ textAlign:'center', marginBottom:'2rem' }}>
-            <div style={{ fontSize:'3.5rem', marginBottom:'1rem' }}>{survived ? '🏆' : '📉'}</div>
-            <h2 style={{ fontSize:'1.8rem', fontWeight:800, marginBottom:'0.5rem' }}>{survived ? t('ventureSurvived') : t('ventureFailed')}</h2>
-            <p style={{ opacity:0.7, fontSize:'1rem' }}>{survived ? `You balanced impact and sustainability across ${decisionLog.length} operational decisions.` : 'Your cash runway hit zero. This is the most common reason social ventures fail.'}</p>
-          </div>
-
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'1rem', marginBottom:'2rem' }}>
-            {[
-              { label:'Final Cash', value:`${resources.cash}%`, color: resources.cash > 30 ? '#10b981' : '#ef4444' },
-              { label:'Social Impact', value:`${impactScore}%`, color:'#60a5fa' },
-              { label:'Strategic Trust', value:`${trustScore}%`, color:'#a78bfa' },
-            ].map(m => (
-              <div key={m.label} style={{ background:'rgba(255,255,255,0.06)', padding:'1.25rem', borderRadius:'1rem', textAlign:'center' }}>
-                <div style={{ fontSize:'0.75rem', opacity:0.55, fontWeight:600, marginBottom:'0.4rem', textTransform:'uppercase', letterSpacing:'0.06em' }}>{m.label}</div>
-                <div style={{ fontSize:'2rem', fontWeight:800, color:m.color }}>{m.value}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Decision replay */}
-          <div style={{ marginBottom:'1.5rem' }}>
-            <div style={{ fontSize:'0.75rem', opacity:0.45, fontWeight:700, letterSpacing:'0.08em', marginBottom:'0.85rem' }}>{t('decisionLog').toUpperCase()}</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
-              {decisionLog.map((d, i) => (
-                <div key={i} style={{ background:'rgba(255,255,255,0.04)', padding:'0.75rem 1rem', borderRadius:'0.5rem', display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:'0.88rem' }}>
-                  <span style={{ opacity:0.8 }}>{i+1}. {d.choiceLabel}</span>
-                  <div style={{ display:'flex', gap:'0.75rem', fontSize:'0.78rem' }}>
-                    <span style={{ color: d.deltas.cash < 0 ? '#fca5a5' : '#6ee7b7' }}>Cash {d.deltas.cash > 0 ? '+' : ''}{d.deltas.cash}</span>
-                    <span style={{ color:'#93c5fd' }}>Impact +{d.deltas.impact}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {evaluation && (
-            <div style={{ background:'rgba(255,255,255,0.04)', padding:'1.25rem', borderRadius:'1rem', borderLeft:'3px solid var(--accent-primary)' }}>
-              <div style={{ fontSize:'0.72rem', opacity:0.5, fontWeight:700, letterSpacing:'0.08em', marginBottom:'0.4rem' }}>{t('discoveryInsight').toUpperCase()}</div>
-              <p style={{ fontSize:'0.9rem', opacity:0.78, lineHeight:1.65, margin:0 }}>{evaluation.tacticalStance}</p>
-            </div>
-          )}
+        <ReportCard
+          resources={resources}
+          decisionLog={decisionLog}
+          mvpFeatures={mvpFeatures}
+          fundingDetails={fundingDetails}
+        />
+        <div style={{ marginTop: '3rem', maxWidth: 900, margin: '3rem auto 0 auto', width: '100%' }}>
+          <button onClick={() => { setProblem(''); setSimulationId(''); setRound(1); setPersonas([]); setEvaluation(null); setDecisionLog([]); setResources({cash:80,impact:20,trust:50}); setAppState('form'); }}
+            className="btn-solid btn-lg" style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'0.5rem' }}>
+            <RefreshCw size={16}/> {t('startNewSimulation')}
+          </button>
         </div>
-
-        <button onClick={() => { setProblem(''); setSimulationId(''); setRound(1); setPersonas([]); setEvaluation(null); setDecisionLog([]); setResources({cash:80,impact:20,trust:50}); setAppState('form'); }}
-          className="btn-solid btn-lg" style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'0.5rem' }}>
-          <RefreshCw size={16}/> {t('startNewSimulation')}
-        </button>
       </main>
     );
   }

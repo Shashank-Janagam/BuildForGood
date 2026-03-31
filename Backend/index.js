@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from './models/User.js';
 import simulationRoutes from './routes/simulation.js';
+import cofounderRoutes from './routes/cofounder.js';
 
 dotenv.config();
 
@@ -148,6 +149,7 @@ app.put('/api/auth/profile', async (req, res) => {
 });
 
 app.use('/api/simulation', simulationRoutes);
+app.use('/api/cofounder', cofounderRoutes);
 
 app.get("/api/health",(req,res)=>{
   console.log("listening");

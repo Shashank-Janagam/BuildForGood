@@ -110,21 +110,21 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
         <div className="modal-blue-panel">
           <div className="topo-overlay" aria-hidden="true">
             <svg className="topo-svg" viewBox="0 0 400 600" fill="none">
-              <path d="M-50 100 Q 150 50 300 200 T 500 150" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" fill="none"/>
-              <path d="M-50 170 Q 130 110 280 240 T 500 200" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" fill="none"/>
-              <path d="M-50 240 Q 110 180 250 280 T 500 270" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" fill="none"/>
-              <path d="M-50 310 Q 80 260 200 330 T 500 340" stroke="rgba(255,255,255,0.10)" strokeWidth="1.5" fill="none"/>
-              <circle cx="110" cy="470" r="50"  stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" fill="none"/>
-              <circle cx="110" cy="470" r="100" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" fill="none"/>
-              <circle cx="110" cy="470" r="160" stroke="rgba(255,255,255,0.09)" strokeWidth="1.5" fill="none"/>
-              <circle cx="110" cy="470" r="230" stroke="rgba(255,255,255,0.06)" strokeWidth="1.5" fill="none"/>
+              <path d="M-50 100 Q 150 50 300 200 T 500 150" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" fill="none" />
+              <path d="M-50 170 Q 130 110 280 240 T 500 200" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" fill="none" />
+              <path d="M-50 240 Q 110 180 250 280 T 500 270" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" fill="none" />
+              <path d="M-50 310 Q 80 260 200 330 T 500 340" stroke="rgba(255,255,255,0.10)" strokeWidth="1.5" fill="none" />
+              <circle cx="110" cy="470" r="50" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" fill="none" />
+              <circle cx="110" cy="470" r="100" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" fill="none" />
+              <circle cx="110" cy="470" r="160" stroke="rgba(255,255,255,0.09)" strokeWidth="1.5" fill="none" />
+              <circle cx="110" cy="470" r="230" stroke="rgba(255,255,255,0.06)" strokeWidth="1.5" fill="none" />
             </svg>
           </div>
 
           <div className="blue-slide-content" key={currentSlide}>
             <img src={slide.img} alt="" className="slide-image" />
             <div className="slide-headline">
-              {slide.headline.split('\n').map((line, i) => <span key={i}>{line}<br/></span>)}
+              {slide.headline.split('\n').map((line, i) => <span key={i}>{line}<br /></span>)}
             </div>
             <p className="slide-sub">{slide.sub}</p>
           </div>
@@ -139,7 +139,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
 
         {/* ── RIGHT FORM PANEL ── */}
         <div className="modal-white-panel">
-          <button className="modal-close" onClick={onClose}><X size={20}/></button>
+          <button className="modal-close" onClick={onClose}><X size={20} /></button>
 
           <div className="modal-form-area">
             <h2 className="modal-title">
@@ -147,7 +147,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
             </h2>
 
             {error && (
-              <div className="error-msg"><AlertCircle size={16}/> {error}</div>
+              <div className="error-msg"><AlertCircle size={16} /> {error}</div>
             )}
 
             {/* Role selector removed — all users explore both roles freely */}
@@ -158,13 +158,13 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
                   <div className="flat-input-group">
                     <label className="flat-label">Full Name</label>
                     <input type="text" className="flat-input" placeholder="Jane Doe"
-                      value={name} onChange={e => setName(e.target.value)} required autoFocus/>
+                      value={name} onChange={e => setName(e.target.value)} required autoFocus />
                   </div>
                 )}
                 <div className="flat-input-group">
                   <label className="flat-label">{t('emailAddress')}</label>
                   <input type="email" className="flat-input" placeholder="jane@example.com"
-                    value={email} onChange={e => setEmail(e.target.value)} required autoFocus={mode === 'login'}/>
+                    value={email} onChange={e => setEmail(e.target.value)} required autoFocus={mode === 'login'} />
                 </div>
                 <button type="submit" className="btn-blue-full">Continue →</button>
               </form>
@@ -177,11 +177,11 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
                 <div className="flat-input-group">
                   <label className="flat-label">{t('password')}</label>
                   <input type="password" className="flat-input" placeholder="••••••••"
-                    value={password} onChange={e => setPassword(e.target.value)} required autoFocus/>
+                    value={password} onChange={e => setPassword(e.target.value)} required autoFocus />
                 </div>
                 <button type="submit" className="btn-blue-full" disabled={isLoading}>
                   {isLoading
-                    ? <div className="loader-white"/>
+                    ? <div className="loader-white" />
                     : (mode === 'login' ? t('login') : t('signUp'))}
                 </button>
               </form>

@@ -315,4 +315,79 @@ router.post('/decision', auth, async (req, res) => {
   }
 });
 
+// ── POST Generate Co-Founder Profiles (AI-powered, tier & qualification aware) ─
+router.post('/cofounders', auth, async (req, res) => {
+  try {
+    const { simulationId, problemStatement, qualification, tier } = req.body;
+    const groq = getGroq();
+    const modelName = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+
+    const tierPriceGuide = {
+      Newbie:       '₹5,000 – ₹15,000 per month',
+      Amateur:      '₹20,000 – ₹50,000 per month',
+      Professional: '₹60,000 – ₹1,50,000 per month'
+    };
+
+    const prompt = `You are a co-founder matching engine for Indian social enterprises.
+A founder working on the problem: "${problemStatement}" is looking for a co-founder.
+
+Requirements:
+- Desired qualification / skill area: "${qualification || 'General management'}"
+- Tier level: "${tier}" (${tierPriceGuide[tier] || tierPriceGuide['Amateur']})
+
+Generate exactly 3 co-founder profiles that would be a great match.
+All profiles must:
+- Have authentic Indian names
+- Match the "${tier}" experience level
+- Have a realistic monthly price in Indian Rupees within the tier range
+- Be relevant to the founder's problem domain
+
+Output STRICTLY as a JSON array. Each object must have:
+"name" (string - Indian name),
+"qualification" (string - their actual qualification/degree),
+"tier" (string - "${tier}"),
+"specialty" (string - their area of expertise),
+"price" (number - monthly price in ₹, must be within the tier range),
+"rating" (number - rating out of 5 with one decimal, Newbie: 2.5-3.5, Amateur: 3.5-4.3, Professional: 4.3-5.0),
+"bio" (string - 1-2 sentences about their background and why they fit this venture)
+
+Output only the raw JSON array. Do not wrap in markdown.`;
+
+    const completion = await groq.chat.completions.create({
+      messages: [{ role: 'user', content: prompt }],
+      model: modelName,
+    });
+
+    const cofounders = JSON.parse(stripCodeFences(completion.choices[0].message.content));
+    res.json({ cofounders });
+  } catch (error) {
+    console.error('Cofounders error:', error);
+    res.status(500).json({ message: error.message || 'Failed to generate co-founders' });
+  }
+});
+
+// ── POST Save Progress State ─────────────────────────────────────────────────
+router.post('/progress', auth, async (req, res) => {
+  try {
+    const { simulationId, coFounderSkipped, pitchComplete, fundingInvestor, fundingAmount, fundingEquity, mvpComplete, mvpFeatures } = req.body;
+    const sim = await Simulation.findOne({ _id: simulationId, userId: req.user.userId });
+    if (!sim) return res.status(404).json({ message: 'Simulation not found' });
+
+    if (coFounderSkipped !== undefined) sim.coFounderSkipped = coFounderSkipped;
+    if (pitchComplete !== undefined) sim.pitchComplete = pitchComplete;
+    if (fundingInvestor !== undefined) sim.fundingInvestor = fundingInvestor;
+    if (fundingAmount !== undefined) sim.fundingAmount = fundingAmount;
+    if (fundingEquity !== undefined) sim.fundingEquity = fundingEquity;
+    if (mvpComplete !== undefined) sim.mvpComplete = mvpComplete;
+    if (mvpFeatures !== undefined) sim.mvpFeatures = mvpFeatures;
+    
+    sim.updatedAt = Date.now();
+    await sim.save();
+
+    res.json({ message: 'Progress saved' });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+});
+
 export default router;

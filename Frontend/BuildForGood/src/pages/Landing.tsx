@@ -8,6 +8,7 @@ export default function Landing() {
   const { t } = useLang();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [didCountStats, setDidCountStats] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
   const taglineRef = useRef<HTMLDivElement>(null);
   const statsRef = useRef<HTMLDivElement>(null);
@@ -22,6 +23,62 @@ export default function Landing() {
     targets.forEach(t => { if (t) observer.observe(t); });
     return () => observer.disconnect();
   }, []);
+
+  // Stats count-up when the stats section scrolls into view.
+  useEffect(() => {
+    const root = statsRef.current;
+    if (!root || didCountStats) return;
+
+    const nodes = Array.from(root.querySelectorAll<HTMLElement>('.stat-number[data-target]'));
+    if (nodes.length === 0) return;
+
+    const durationMs = 1200;
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    const formatValue = (node: HTMLElement, n: number) => {
+      const format = node.dataset.format ?? '';
+      if (format === 'kplus') {
+        const k = Math.round(n / 1000);
+        return `${k}K+`;
+      }
+      if (format === 'plus') return `${Math.round(n)}+`;
+      if (format === 'percent') return `${Math.round(n)}%`;
+      return `${Math.round(n)}`;
+    };
+
+    const animateNode = (node: HTMLElement, target: number) => {
+      const start = performance.now();
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - start) / durationMs);
+        const eased = easeOutCubic(t);
+        const v = target * eased;
+        node.textContent = formatValue(node, v);
+        if (t < 1) requestAnimationFrame(tick);
+        else node.textContent = formatValue(node, target);
+      };
+      requestAnimationFrame(tick);
+    };
+
+    const obs = new IntersectionObserver(
+      entries => {
+        if (entries.some(e => e.isIntersecting)) {
+          obs.disconnect();
+          setDidCountStats(true);
+          nodes.forEach(node => {
+            const target = Number(node.dataset.target ?? 0);
+            if (Number.isFinite(target)) {
+              node.textContent = formatValue(node, 0);
+              animateNode(node, target);
+            }
+          });
+        }
+      },
+      { threshold: 0.25 }
+    );
+
+    obs.observe(root);
+    return () => obs.disconnect();
+  }, [didCountStats]);
 
   const openAuth = (mode: 'login' | 'signup') => {
     setAuthMode(mode);
@@ -94,15 +151,15 @@ export default function Landing() {
         <section className="stats-section reveal-section" ref={statsRef}>
           <div className="stats-grid">
             <div className="stat-item">
-              <div className="stat-number">10K+</div>
+              <div className="stat-number" data-target="10000" data-format="kplus">0K+</div>
               <div className="stat-desc">Founders Onboarded</div>
             </div>
             <div className="stat-item">
-              <div className="stat-number">50+</div>
+              <div className="stat-number" data-target="50" data-format="plus">0+</div>
               <div className="stat-desc">Countries Reached</div>
             </div>
             <div className="stat-item">
-              <div className="stat-number">98%</div>
+              <div className="stat-number" data-target="98" data-format="percent">0%</div>
               <div className="stat-desc">Satisfaction Rate</div>
             </div>
           </div>
