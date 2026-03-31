@@ -3,7 +3,7 @@ import Navbar from '../components/Navbar';
 import {
   Sparkles, UserCircle, Send, ArrowLeft, BrainCircuit,
   RefreshCw, CheckCircle2, Activity, ShieldAlert,
-  AlertTriangle, Zap, UserPlus, Users
+  Zap, UserPlus, Users
 } from 'lucide-react';
 import { useLang } from '../contexts/LanguageContext';
 import InvestorPitch from '../components/InvestorPitch';
